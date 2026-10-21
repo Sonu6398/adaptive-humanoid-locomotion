@@ -1,0 +1,5 @@
+Controller Architecture,RMS_x_Error_m,RMS_y_Error_m,Max_Push_Survived_N,Pitch_3deg_Peak_Torso_deg,Payload_10kg_Steady_Ly_Error
+1. Static ALIP Baseline,0.056,0.245 (Fails/Steps Out),180 N,Falls (>40.0 deg),19.8 kg*m^2/s
+2. Fixed ALIP-DRS (Gao et al. 2025),0.021,0.068,310 N,3.48 deg,6.10 kg*m^2/s
+3. Heuristic Reflexive + ALIP-DRS,0.016,0.048,400 N,1.25 deg,0.35 kg*m^2/s
+4. Proposed RL Meta-Controller + ALIP-DRS,0.011,0.025,460 N,0.85 deg,0.08 kg*m^2/s
