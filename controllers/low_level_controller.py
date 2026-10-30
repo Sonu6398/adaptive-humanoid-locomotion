@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import minimize
 from controllers.bezier_gait import BezierGaitGenerator
 
 
@@ -17,6 +18,16 @@ class LowLevelWholeBodyController:
         # Nominal PD gains from Section VI-A2 of Gao et al. (Kp = 729*I, Kd = 27*I)
         self.kp_nom = 729.0 * np.ones(self.na)
         self.kd_nom = 27.0 * np.ones(self.na)
+
+        # Effective task-space inertia diagonal approximation for Digit's 18 active channels
+        self.m_eff = np.array([
+            46.1, 3.5, 3.5, 2.0,      # CoM z, trunk roll/pitch/yaw
+            3.2, 3.2, 3.2,            # Swing leg foot x, y, z
+            0.5, 0.5, 0.5,            # Swing foot orientation
+            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0  # Upper body joints
+        ])
+        self.w_tau = 1e-4
+        self.w_delta = 1.0
 
     def build_desired_task_vector(
         self,
@@ -56,8 +67,12 @@ class LowLevelWholeBodyController:
         """
         Input-Output Linearizing Control with Quadratic Programming (IO-QP)
         from Eqs. (31)-(33) of Gao et al. (2025).
-        Shapes output tracking error h = h_a - h_d via \ddot{h} = -K_p h - K_d \dot{h}
-        and enforces friction cone and actuator torque bounds via slack variable delta_QP.
+        Solves:
+            min_{tau_u, delta} 0.5 * w_tau * ||tau_u||^2 + 0.5 * w_delta * ||delta||^2
+            subject to:
+                tau_u = M_eff * (v + delta)
+                -tau_limit <= tau_u <= tau_limit
+                sqrt(tau_u[4]^2 + tau_u[5]^2) <= mu * f_z
         """
         kp = self.kp_nom * np.clip(kp_scale, 0.5, 2.0)
         kd = self.kd_nom * np.clip(kd_scale, 0.5, 2.0)
@@ -65,25 +80,54 @@ class LowLevelWholeBodyController:
         h_err = h_actual - h_desired
         dh_err = dh_actual - dh_desired
 
-        # Ideal stabilizing auxiliary input v = -K_p h - K_d \dot{h}
-        v = -kp * h_err - kd * dh_err + ddh_desired
+        # Ideal stabilizing auxiliary input v = -K_p h - K_d \dot{h} + \ddot{h}_d
+        v = ddh_desired - kp * h_err - kd * dh_err
 
-        # Effective task-space inertia diagonal approximation for Digit's 18 active channels
-        m_eff = np.array([
-            46.1, 3.5, 3.5, 2.0,      # CoM z, trunk roll/pitch/yaw
-            3.2, 3.2, 3.2,            # Swing leg foot x, y, z
-            0.5, 0.5, 0.5,            # Swing foot orientation
-            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0  # Upper body joints
-        ])
-        tau_ideal = m_eff * v
+        inv_m = 1.0 / self.m_eff
+        max_horiz_force = self.mu * max(float(normal_force_fz), 100.0)
 
-        # Enforce friction cone constraint on horizontal reaction channels (|f_xy| <= mu * f_z)
-        max_horiz_force = self.mu * max(normal_force_fz, 100.0)
-        tau_constrained = tau_ideal.copy()
-        tau_constrained[4:6] = np.clip(tau_constrained[4:6], -max_horiz_force, max_horiz_force)
+        # Unconstrained / box-constrained solution for independent channels:
+        # tau_i = (w_delta * inv_m[i] * v[i]) / (w_tau + w_delta * inv_m[i]**2)
+        denom = self.w_tau + self.w_delta * (inv_m ** 2)
+        tau_opt = (self.w_delta * inv_m * v) / denom
+        tau_opt = np.clip(tau_opt, -self.torque_limit, self.torque_limit)
 
-        # Enforce joint torque saturation limits [-torque_limit, +torque_limit]
-        tau_u = np.clip(tau_constrained, -self.torque_limit, self.torque_limit)
-        delta_qp = tau_u - tau_ideal
+        # Enforce coupled circular friction cone constraint on horizontal contact channels (indices 4, 5)
+        f_horiz_sq = tau_opt[4] ** 2 + tau_opt[5] ** 2
+        if f_horiz_sq > max_horiz_force ** 2:
+            idx = [4, 5]
+            inv_m_sub = inv_m[idx]
+            v_sub = v[idx]
+
+            def sub_cost(tau_sub):
+                delta_sub = inv_m_sub * tau_sub - v_sub
+                return 0.5 * self.w_tau * np.dot(tau_sub, tau_sub) + 0.5 * self.w_delta * np.dot(delta_sub, delta_sub)
+
+            def sub_jac(tau_sub):
+                delta_sub = inv_m_sub * tau_sub - v_sub
+                return self.w_tau * tau_sub + self.w_delta * (inv_m_sub * delta_sub)
+
+            bounds_sub = [(-self.torque_limit, self.torque_limit), (-self.torque_limit, self.torque_limit)]
+            cons_sub = {"type": "ineq", "fun": lambda tau_sub: max_horiz_force ** 2 - (tau_sub[0] ** 2 + tau_sub[1] ** 2)}
+
+            scale = max_horiz_force / np.sqrt(f_horiz_sq)
+            tau0_sub = tau_opt[idx] * scale
+
+            res = minimize(
+                sub_cost,
+                tau0_sub,
+                jac=sub_jac,
+                bounds=bounds_sub,
+                constraints=cons_sub,
+                method="SLSQP",
+                options={"maxiter": 30, "ftol": 1e-6},
+            )
+            if res.success:
+                tau_opt[idx] = res.x
+            else:
+                tau_opt[idx] = tau0_sub
+
+        tau_u = tau_opt
+        delta_qp = inv_m * tau_u - v
 
         return tau_u, delta_qp
