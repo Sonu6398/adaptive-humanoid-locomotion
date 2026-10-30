@@ -64,7 +64,8 @@ class RLMetaControllerPolicy:
         T_curr = np.clip(planner.T_step + delta_T_step, 0.28, 0.50)
 
         Ly_target = planner.m * H_curr * vx_des
-        Lx_target = planner.desired_lateral_momentum(next_foot, H_curr, T_curr)
+        current_foot = "right" if next_foot == "left" else "left"
+        Lx_target = planner.desired_lateral_momentum(current_foot, H_curr, T_curr)
 
         int_Ly_err = np.clip(int_Ly_err + k_int_Ly * (Ly_target - x_minus[1]), -30.0, 30.0)
         int_Lx_err = np.clip(int_Lx_err + k_int_Lx * (Lx_target - y_minus[1]), -25.0, 25.0)

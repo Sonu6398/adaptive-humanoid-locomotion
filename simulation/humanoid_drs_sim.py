@@ -153,7 +153,7 @@ class PerturbedHumanoidDRSSimulator:
             meta_mods = {}
             if mode == "adaptive_reflexive":
                 Ly_target = self.planner.m * H_curr * vx_des
-                Lx_target = self.planner.desired_lateral_momentum(next_foot, H_curr, self.planner.T_step)
+                Lx_target = self.planner.desired_lateral_momentum(support_foot, H_curr, self.planner.T_step)
                 int_Ly_err = np.clip(int_Ly_err + 0.35 * (Ly_target - x_minus[1]), -25.0, 25.0)
                 int_Lx_err = np.clip(int_Lx_err + 0.25 * (Lx_target - y_minus[1]), -20.0, 20.0)
 
