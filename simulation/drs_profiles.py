@@ -2,10 +2,10 @@ import numpy as np
 
 
 class DynamicSupportSurface:
-    """
+    r"""
     Simulates Dynamic Rigid Surface (DRS) kinematics (position, velocity, acceleration)
-    including periodic sway (Cases A-D in Gao et al., 2025), amplitude/phase uncertainties,
-    and non-periodic motions.
+    including periodic sway (Cases A-D in Gao et al., 2025), vertical heave, amplitude/phase
+    uncertainties, and non-periodic motions.
     """
     def __init__(self, case: str = "A", delta_A: float = 0.0, delta_t: float = 0.0):
         self.case = case.upper()
@@ -13,7 +13,7 @@ class DynamicSupportSurface:
         self.delta_t = delta_t  # Phase/time uncertainty offset (s)
 
     def position(self, t: float) -> tuple[float, float]:
-        """Returns (x_WS(t), y_WS(t)) in meters in the world frame."""
+        r"""Returns (x_WS(t), y_WS(t)) in meters in the world frame."""
         t_eff = t + self.delta_t
         if self.case == "A":
             return (0.04 + self.delta_A) * np.cos(2 * np.pi / 0.4 * t_eff), 0.0
@@ -25,6 +25,12 @@ class DynamicSupportSurface:
             x = (0.04 + self.delta_A) * np.cos(2 * np.pi / 0.4 * t_eff)
             y = (0.10 + self.delta_A) * np.cos(2 * np.pi / 6.0 * t_eff)
             return x, y
+        elif self.case == "E":  # Pure ship heave (vertical deck oscillation)
+            return 0.0, 0.0
+        elif self.case == "F":  # Ship coupled multi-axis sway and surge
+            x = (0.06 + self.delta_A) * np.cos(2 * np.pi / 3.0 * t_eff)
+            y = (0.12 + self.delta_A) * np.cos(2 * np.pi / 5.5 * t_eff)
+            return x, y
         elif self.case == "NONPERIODIC":
             x = (0.04 / (1.0 + t)) * np.sin(t)
             y = 0.10 * np.cos(2 * np.pi / 6.0 * t)
@@ -32,7 +38,7 @@ class DynamicSupportSurface:
         return 0.0, 0.0
 
     def velocity(self, t: float) -> tuple[float, float]:
-        """Returns (\dot{x}_WS(t), \dot{y}_WS(t)) in m/s in the world frame."""
+        r"""Returns (\dot{x}_WS(t), \dot{y}_WS(t)) in m/s in the world frame."""
         t_eff = t + self.delta_t
         if self.case == "A":
             w = 2 * np.pi / 0.4
@@ -49,8 +55,25 @@ class DynamicSupportSurface:
             dx = -(0.04 + self.delta_A) * wx * np.sin(wx * t_eff)
             dy = -(0.10 + self.delta_A) * wy * np.sin(wy * t_eff)
             return dx, dy
+        elif self.case == "E":
+            return 0.0, 0.0
+        elif self.case == "F":
+            wx = 2 * np.pi / 3.0
+            wy = 2 * np.pi / 5.5
+            dx = -(0.06 + self.delta_A) * wx * np.sin(wx * t_eff)
+            dy = -(0.12 + self.delta_A) * wy * np.sin(wy * t_eff)
+            return dx, dy
         elif self.case == "NONPERIODIC":
             dx = 0.04 * ((1.0 + t) * np.cos(t) - np.sin(t)) / ((1.0 + t) ** 2)
             dy = -0.10 * (2 * np.pi / 6.0) * np.sin(2 * np.pi / 6.0 * t)
             return dx, dy
         return 0.0, 0.0
+
+    def heave_acceleration(self, t: float) -> float:
+        r"""Returns vertical deck acceleration \ddot{z}_WS(t) in m/s^2."""
+        t_eff = t + self.delta_t
+        if self.case in ("E", "F"):
+            w_heave = 2 * np.pi / 3.5
+            a_heave = 0.08 + self.delta_A  # 8 cm vertical heave amplitude
+            return -a_heave * (w_heave ** 2) * np.cos(w_heave * t_eff)
+        return 0.0
