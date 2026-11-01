@@ -82,6 +82,8 @@ class PerturbedHumanoidDRSSimulator:
                 t = t_start + i * dt
                 dx_ws, dy_ws = self.actual_surface.velocity(t)
                 fx_push, fy_push, pitch_s = self.external_disturbance(t)
+                az_deck = getattr(self.actual_surface, "heave_acceleration", lambda _: 0.0)(t)
+                g_eff = g - az_deck
 
                 # Relative CoM velocities (Eq. 8 in Gao et al.)
                 vx_rel = (x_state[1] - L_com[1]) / (m_true * H_curr) - dx_ws
@@ -112,7 +114,7 @@ class PerturbedHumanoidDRSSimulator:
                 # Continuous-phase dynamics (Eqs. 6-10 in Gao et al. + disturbances)
                 dx_sc = vx_rel
                 dLy_s = (
-                    m_true * g * x_state[0]
+                    m_true * g_eff * x_state[0]
                     + tau_Ay
                     + H_curr * fx_push
                     + payload_moment_y
@@ -121,7 +123,7 @@ class PerturbedHumanoidDRSSimulator:
 
                 dy_sc = vy_rel
                 dLx_s = (
-                    -m_true * g * y_state[0]
+                    -m_true * g_eff * y_state[0]
                     + tau_Ax
                     - H_curr * fy_push
                     + pitch_dist_x
@@ -130,7 +132,6 @@ class PerturbedHumanoidDRSSimulator:
                 # Euler integration
                 x_state = x_state + dt * np.array([dx_sc, dLy_s])
                 y_state = y_state + dt * np.array([dy_sc, dLx_s])
-                L_com = np.clip(L_com + dt * np.array([dLx_com, dLy_com]), -15.0, 15.0)
 
                 # Torso IMU kinematics driven by surface pitch, push, and hip recovery
                 I_torso = 3.5
@@ -138,6 +139,9 @@ class PerturbedHumanoidDRSSimulator:
                 dd_pitch = (dLy_com + 0.2 * fx_push - 40.0 * (theta_imu[1] - pitch_s) - 8.0 * theta_gyro[1]) / I_torso
                 theta_gyro = theta_gyro + dt * np.array([dd_roll, dd_pitch])
                 theta_imu = theta_imu + dt * theta_gyro
+
+                # Centroidal angular momentum strictly coupled to torso flywheel inertia: L_CoM = I_torso * omega
+                L_com = np.clip(I_torso * theta_gyro, -15.0, 15.0)
 
                 t_hist.append(t)
                 x_hist.append(x_state.copy())
