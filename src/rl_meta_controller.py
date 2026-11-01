@@ -97,6 +97,7 @@ def evaluate_policy_episode(
     surface_pitch_deg: float = 2.5,
     num_steps: int = 15,
     dt: float = 0.005,
+    push_time_window: tuple[float, float] = (1.6, 1.7),
 ) -> dict:
     """
     Simulates one episode on a swaying, pitching support surface with impulsive push and payload.
@@ -133,8 +134,8 @@ def evaluate_policy_episode(
         for i in range(n_sub):
             t = t_start + i * dt
             dx_ws, dy_ws = surface.velocity(t)
-            fx_push = push_force_xy[0] if (1.6 <= t <= 1.7) else 0.0
-            fy_push = push_force_xy[1] if (1.6 <= t <= 1.7) else 0.0
+            fx_push = push_force_xy[0] if (push_time_window[0] <= t <= push_time_window[1]) else 0.0
+            fy_push = push_force_xy[1] if (push_time_window[0] <= t <= push_time_window[1]) else 0.0
             pitch_s = pitch_rad * np.sin(pitch_w * t)
 
             vx_rel = (x_state[1] - L_com[1]) / (m_true * H_curr) - dx_ws
@@ -177,10 +178,11 @@ def evaluate_policy_episode(
             y_hist.append(y_state.copy())
             imu_hist.append(theta_imu.copy())
 
-            # Fall termination conditions
+            # Fall termination conditions with shaped survival penalty
             if abs(x_state[0]) > 0.42 or abs(y_state[0]) > 0.42 or np.max(np.abs(theta_imu)) > 0.70:
                 fell = True
-                total_cost += 250.0
+                remaining_steps = num_steps - k
+                total_cost += 30.0 + 15.0 * remaining_steps
                 break
 
         if fell:
@@ -192,8 +194,9 @@ def evaluate_policy_episode(
         next_foot = "right" if support_foot == "left" else "left"
         push_active = np.linalg.norm(theta_gyro) > 0.35
 
+        pitch_amp_est = float(theta_imu[1])
         meta_mods, int_Ly_err, int_Lx_err, H_curr, T_curr = policy.select_step_meta_parameters(
-            x_minus, y_minus, vx_des, next_foot, planner, int_Ly_err, int_Lx_err, pitch_rad, push_active
+            x_minus, y_minus, vx_des, next_foot, planner, int_Ly_err, int_Lx_err, pitch_amp_est, push_active
         )
 
         u_x, u_y, _, _ = planner.compute_foot_placement(
@@ -222,7 +225,13 @@ def evaluate_policy_episode(
     }
 
 
-def train_stochastic_policy_gradient(num_episodes: int = 45, pop_size: int = 10, sigma: float = 0.04, lr: float = 0.08):
+def train_stochastic_policy_gradient(
+    num_episodes: int = 45,
+    pop_size: int = 10,
+    sigma: float = 0.04,
+    lr: float = 0.08,
+    randomize_push_timing: bool = True,
+):
     """
     Trains the high-level RL Meta-Controller using Stochastic Policy Gradient
     (Section IV-B of Yi et al., 2011) across multi-directional sway, pitch, and pushes.
@@ -232,7 +241,13 @@ def train_stochastic_policy_gradient(num_episodes: int = 45, pop_size: int = 10,
     reward_history = []
 
     for ep in range(num_episodes):
-        base_eval = evaluate_policy_episode(best_policy)
+        if randomize_push_timing:
+            t0 = float(rng.uniform(1.0, 2.5))
+            push_win = (t0, t0 + 0.1)
+        else:
+            push_win = (1.6, 1.7)
+
+        base_eval = evaluate_policy_episode(best_policy, push_time_window=push_win)
         reward_history.append(base_eval["reward"])
 
         epsilons = rng.normal(0.0, sigma, size=(pop_size, len(best_policy.theta)))
@@ -241,7 +256,7 @@ def train_stochastic_policy_gradient(num_episodes: int = 45, pop_size: int = 10,
         for i in range(pop_size):
             cand_policy = RLMetaControllerPolicy(best_policy.theta + epsilons[i])
             cand_policy.clip_params()
-            res = evaluate_policy_episode(cand_policy)
+            res = evaluate_policy_episode(cand_policy, push_time_window=push_win)
             rewards[i] = res["reward"]
 
         std_r = np.std(rewards) + 1e-6
