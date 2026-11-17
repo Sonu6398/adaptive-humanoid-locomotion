@@ -1,6 +1,5 @@
 import os
 import sys
-import csv
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -203,16 +202,5 @@ if __name__ == "__main__":
     plt.savefig(out_img, dpi=200)
     print(f"[SUCCESS] Saved Full-Hierarchy & Ablation plot to {out_img}")
 
-    # [3/3] Save Quantitative Comparison Table to CSV
-    csv_path = os.path.join("results", "final_ablation_metrics.csv")
-    rows = [
-        ["Controller Architecture", "RMS_x_Error_m", "RMS_y_Error_m", "Max_Push_Survived_N", "Pitch_3deg_Peak_Torso_deg", "Payload_10kg_Steady_Ly_Error"],
-        ["1. Static ALIP Baseline", "0.056", "0.245 (Fails/Steps Out)", "180 N", "Falls (>40.0 deg)", "19.8 kg*m^2/s"],
-        ["2. Fixed ALIP-DRS (Gao et al. 2025)", "0.021", "0.068", "310 N", "3.48 deg", "6.10 kg*m^2/s"],
-        ["3. Heuristic Reflexive + ALIP-DRS", "0.016", "0.048", "400 N", "1.25 deg", "0.35 kg*m^2/s"],
-        ["4. Proposed RL Meta-Controller + ALIP-DRS", "0.011", "0.025", "460 N", "0.85 deg", "0.08 kg*m^2/s"],
-    ]
-    with open(csv_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerows(rows)
-    print(f"[SUCCESS] Saved quantitative metrics table to {csv_path}")
+    # The quantitative comparison table is now computed by running the simulator
+    # in experiments/exp6_measured_evaluation.py (results/measured_metrics.csv).
