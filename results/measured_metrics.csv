@@ -1,0 +1,22 @@
+controller,case,survives_no_push,survives_default_push,time_default_push_s,max_push_survived_N,rms_x_default_push_m,peak_torso_default_push_deg
+Fixed ALIP-DRS (no adaptation),A,True,False,2.0,200,0.0986,7.12
+Fixed ALIP-DRS (no adaptation),B,True,False,2.0,220,0.0953,7.12
+Fixed ALIP-DRS (no adaptation),C,True,False,2.0,220,0.0875,7.12
+Fixed ALIP-DRS (no adaptation),D,True,False,2.0,200,0.0986,7.12
+Fixed ALIP-DRS (no adaptation),E,True,False,2.0,220,0.0875,7.12
+Fixed ALIP-DRS (no adaptation),F,True,False,2.0,240,0.0872,7.12
+Fixed ALIP-DRS (no adaptation),NONPERIODIC,True,False,2.0,220,0.0877,7.12
+Hand-tuned reflexes + ALIP-DRS,A,False,False,1.19,falls without push,0.0829,1.59
+Hand-tuned reflexes + ALIP-DRS,B,False,False,1.19,falls without push,0.0454,1.58
+Hand-tuned reflexes + ALIP-DRS,C,False,False,0.65,falls without push,0.0265,2.29
+Hand-tuned reflexes + ALIP-DRS,D,False,False,1.16,falls without push,0.0836,1.38
+Hand-tuned reflexes + ALIP-DRS,E,False,False,1.19,falls without push,0.0457,1.58
+Hand-tuned reflexes + ALIP-DRS,F,False,False,1.16,falls without push,0.0451,1.32
+Hand-tuned reflexes + ALIP-DRS,NONPERIODIC,False,False,1.18,falls without push,0.049,1.33
+RL meta-controller + ALIP-DRS,A,True,False,2.0,300,0.0864,6.07
+RL meta-controller + ALIP-DRS,B,True,False,2.0,300,0.0871,6.06
+RL meta-controller + ALIP-DRS,C,True,False,2.0,320,0.0758,6.22
+RL meta-controller + ALIP-DRS,D,True,False,2.0,300,0.0864,6.07
+RL meta-controller + ALIP-DRS,E,True,False,2.0,320,0.0758,6.22
+RL meta-controller + ALIP-DRS,F,True,False,2.0,340,0.0734,6.27
+RL meta-controller + ALIP-DRS,NONPERIODIC,True,False,2.0,320,0.0762,6.21
